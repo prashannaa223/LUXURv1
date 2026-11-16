@@ -2,16 +2,18 @@ import asyncio
 import os
 import random
 import subprocess
+import threading
 
 import edge_tts
 import pygame
-from dotenv import dotenv_values
 
-env_vars = dotenv_values(".env")
-AssistantVoice = env_vars.get("AssistantVoice") or "en-CA-LiamNeural"
+from Backend.Common import AssistantVoice, DATA_DIR, IS_WINDOWS
 
-MP3_PATH = r"Data\speech.mp3"
-WAV_PATH = r"Data\speech.wav"
+MP3_PATH = str(DATA_DIR / "speech.mp3")
+WAV_PATH = str(DATA_DIR / "speech.wav")
+
+# Only one voice at a time (answers, Focus warnings and reminders share the speaker).
+_speak_lock = threading.Lock()
 
 
 async def _edge_save(text) -> bool:
@@ -28,6 +30,8 @@ async def _edge_save(text) -> bool:
 
 def _windows_tts(text) -> bool:
     """Offline fallback: Windows System.Speech synthesizes a WAV."""
+    if not IS_WINDOWS:
+        return False
     try:
         if os.path.exists(WAV_PATH):
             os.remove(WAV_PATH)
@@ -50,6 +54,11 @@ def _windows_tts(text) -> bool:
 
 
 def TTS(Text, func=lambda r=None: True):
+    with _speak_lock:
+        return _tts(Text, func)
+
+
+def _tts(Text, func):
     """Speak `Text` (edge-tts, offline Windows voice as fallback).
     `func()` returning False stops playback early."""
     audio_path = None

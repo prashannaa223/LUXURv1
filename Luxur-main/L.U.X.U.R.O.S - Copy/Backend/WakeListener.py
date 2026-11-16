@@ -9,11 +9,9 @@ import threading
 import time
 from collections import deque
 
-from Backend.Common import (
-    DATA_DIR, GetMicrophoneStatus, TempDirectoryPath, _read, _write,
-)
+from Backend.Common import DATA_DIR, GetMicrophoneStatus, _read, _write
 
-WAKE_WORDS = ("luxur", "lucifer", "luxor", "luxus", "luxus", "wake up", "wakeup")
+WAKE_WORDS = ("luxur", "lucifer", "luxor", "luxus", "wake up", "wakeup")
 
 WAKE_HTML = DATA_DIR / "wake.html"
 MINIMIZED_FILE = "Minimized.data"
@@ -85,8 +83,7 @@ def _get_driver():
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         options = Options()
-        options.add_argument("--use-fake-ui-for-media-stream")
-        options.add_argument("--use-fake-device-for-media-stream")
+        options.add_argument("--use-fake-ui-for-media-stream")  # auto-allow the real microphone
         options.add_argument("--headless=new")
         _driver = webdriver.Chrome(options=options)
     return _driver
