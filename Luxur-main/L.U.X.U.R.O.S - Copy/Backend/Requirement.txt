@@ -1,0 +1,16 @@
+python-dotenv
+groq
+cohere
+googlesearch-python
+selenium
+mtranslate
+pygame-ce
+edge-tts
+huggingface_hub
+PyQt5
+requests
+beautifulsoup4
+pillow
+rich
+AppOpener; sys_platform == "win32"
+keyboard; sys_platform == "win32"
