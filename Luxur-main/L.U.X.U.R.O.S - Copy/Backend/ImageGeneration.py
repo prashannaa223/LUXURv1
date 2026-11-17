@@ -1,80 +1,59 @@
 import asyncio
+import re
+import sys
 from random import randint
+
+from huggingface_hub import InferenceClient
 from PIL import Image
-import requests
-from dotenv import dotenv_values
-import os
-from time import sleep
 
-env_vars = dotenv_values(".env")
-HuggingFaceAPIKey = env_vars.get("HuggingFaceAPIKey")
+from Backend.Common import DATA_DIR, ImageModel, RequireEnv
+
+IMAGE_COUNT = 4
 
 
-def open_images(prompt):
-    folder_path = r"Data"
-    prompt = prompt.replace(" ", "_")
-    files = [f"{prompt}{i}.jpg" for i in range(1, 5)]
-    for jpg_file in files:
-        image_path = os.path.join(folder_path, jpg_file)
+def ImagePaths(prompt):
+    stem = re.sub(r"[^a-z0-9]+", "_", prompt.lower()).strip("_")[:60] or "image"
+    return [DATA_DIR / f"{stem}_{i}.jpg" for i in range(1, IMAGE_COUNT + 1)]
 
+
+def open_images(paths):
+    for image_path in paths:
         try:
-            img = Image.open(image_path)
-            print(f"Opening image: {image_path}")
-            img.show()
-            sleep(1)
-        except IOError:
-            print(f"Error opening image: {image_path}. File may not exist or is not a valid image.")
+            Image.open(image_path).show()
+        except OSError:
+            print(f"Could not open image: {image_path}")
 
 
-API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-headers = {"Authorization": f"Bearer {HuggingFaceAPIKey}"}
+async def generate_images(prompt):
+    # provider="auto" routes to whichever Hugging Face inference provider serves the model.
+    client = InferenceClient(provider="auto", token=RequireEnv("HuggingFaceAPIKey", "HUGGINGFACE_API_KEY"))
+    tasks = [
+        asyncio.to_thread(
+            client.text_to_image,
+            f"{prompt}, quality=4K, sharpness=maximum, Ultra High details, high resolution",
+            model=ImageModel,
+            seed=randint(0, 1_000_000),
+        )
+        for _ in range(IMAGE_COUNT)
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-
-async def query(payload):
-    response = await asyncio.to_thread(requests.post, API_URL, headers=headers, json=payload)
-    return response.content
-
-
-async def generate_image(prompt: str):
-    tasks = []
-    for _ in range(4):
-        payload = {
-            "inputs": f"{prompt}, quality=4K, sharpness=maximum, Ultra High details, high resolution, seed = {randint(0, 1000000)}",
-        }
-        task = asyncio.create_task(query(payload))
-        tasks.append(task)
-
-    image_bytes_list = await asyncio.gather(*tasks)
-    for i, image_bytes in enumerate(image_bytes_list):
-        with open(fr"Data\{prompt.replace(' ', '_')}{i + 1}.jpg", "wb") as f:
-            f.write(image_bytes)
+    saved = []
+    for path, result in zip(ImagePaths(prompt), results):
+        if isinstance(result, Exception):
+            print(f"Image generation failed: {result}")
+            continue
+        result.convert("RGB").save(path, "JPEG", quality=95)
+        saved.append(path)
+    return saved
 
 
 def GenerateImage(prompt: str):
-    asyncio.run(generate_image(prompt))
-    open_images(prompt)
+    prompt = prompt.removeprefix("generate image").strip()
+    saved = asyncio.run(generate_images(prompt))
+    open_images(saved)
+    return bool(saved)
 
 
-while True:
-    try:
-        with open(r"Frontend\Files\ImageGeneration.data", "r", encoding='utf-8') as f:
-            Data: str = f.read()
-
-        if "," not in Data:
-            sleep(1)
-            continue
-
-        Prompt, Status = Data.split(",", 1)
-
-        if Status.strip() == "True" and Prompt.strip():
-            print("Generating Images ...")
-            GenerateImage(prompt=Prompt.strip())
-
-            with open(r"Frontend\Files\ImageGeneration.data", "w", encoding='utf-8') as f:
-                f.write("False,False")
-            break
-        else:
-            sleep(1)
-    except Exception as e:
-        print(e)
-        sleep(1)
+if __name__ == "__main__":
+    GenerateImage(" ".join(sys.argv[1:]) or input("Image prompt: "))

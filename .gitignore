@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Runtime data written by the app (chat log, Pulse Hub database, audio, state files)
+**/Data/*
+!**/Data/.gitkeep
+**/Frontend/Files/*
+!**/Frontend/Files/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
